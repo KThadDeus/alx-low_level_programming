@@ -1,71 +1,104 @@
+#include "main.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-#include <elf.h>
-#include <sys/types.h>
 
-void print_error(const char *message) {
-    dprintf(STDERR_FILENO, "%s\n", message);
-    exit(98);
+char *create_buffer(char *file);
+void close_file(int fd);
+
+/**
+ * create_buffer - Allocates 1024 bytes for a buffer.
+ * @file: The name of the file buffer is storing chars for.
+ *
+ * Return: A pointer to the newly-allocated buffer.
+ */
+char *create_buffer(char *file)
+{
+	char *buffer;
+
+	buffer = malloc(sizeof(char) * 1024);
+
+	if (buffer == NULL)
+	{
+		dprintf(STDERR_FILENO,
+			"Error: Can't write to %s\n", file);
+		exit(99);
+	}
+
+	return (buffer);
 }
 
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        print_error("Usage: elf_header elf_filename");
-    }
+/**
+ * close_file - Closes file descriptors.
+ * @fd: The file descriptor to be closed.
+ */
+void close_file(int fd)
+{
+	int c;
 
-    const char *elf_filename = argv[1];
-    int fd = open(elf_filename, O_RDONLY);
-    if (fd == -1) {
-        print_error("Error: Cannot open file");
-    }
+	c = close(fd);
 
-    // Read the ELF header.
-    Elf64_Ehdr elf_header;
-    if (read(fd, &elf_header, sizeof(Elf64_Ehdr)) != sizeof(Elf64_Ehdr)) {
-        print_error("Error: Cannot read ELF header");
-    }
+	if (c == -1)
+	{
+		dprintf(STDERR_FILENO, "Error: Can't close fd %d\n", fd);
+		exit(100);
+	}
+}
 
-    // Check if it's a valid ELF file.
-    if (memcmp(elf_header.e_ident, ELFMAG, SELFMAG) != 0) {
-        print_error("Error: Not an ELF file");
-    }
+/**
+ * main - Copies the contents of a file to another file.
+ * @argc: The number of arguments supplied to the program.
+ * @argv: An array of pointers to the arguments.
+ *
+ * Return: 0 on success.
+ *
+ * Description: If the argument count is incorrect - exit with status code 97.
+ * If file_from does not exist or cannot be read - exit with status code 98.
+ * If file_to cannot be created or written to - exit with status code 99.
+ * If file_to or file_from cannot be closed - exit with status code 100.
+ */
+int main(int argc, char *argv[])
+{
+	int from, to, r, w;
+	char *buffer;
 
-    // Display the ELF header information.
-    printf("Magic: ");
-    for (int i = 0; i < EI_NIDENT; i++) {
-        printf("%02x ", elf_header.e_ident[i]);
-    }
-    printf("\nClass: %d-bit\n", elf_header.e_ident[EI_CLASS] == ELFCLASS64 ? 64 : 32);
-    printf("Data: %s\n", elf_header.e_ident[EI_DATA] == ELFDATA2LSB ? "2's complement, little endian" : "2's complement, big endian");
-    printf("Version: %d\n", elf_header.e_ident[EI_VERSION]);
-    printf("OS/ABI: %d\n", elf_header.e_ident[EI_OSABI]);
-    printf("ABI Version: %d\n", elf_header.e_ident[EI_ABIVERSION]);
+	if (argc != 3)
+	{
+		dprintf(STDERR_FILENO, "Usage: cp file_from file_to\n");
+		exit(97);
+	}
 
-    printf("Type: ");
-    switch (elf_header.e_type) {
-        case ET_REL:
-            printf("REL (Relocatable file)\n");
-            break;
-        case ET_EXEC:
-            printf("EXEC (Executable file)\n");
-            break;
-        case ET_DYN:
-            printf("DYN (Shared object file)\n");
-            break;
-        case ET_CORE:
-            printf("CORE (Core file)\n");
-            break;
-        default:
-            printf("Unknown (%#x)\n", elf_header.e_type);
-            break;
-    }
+	buffer = create_buffer(argv[2]);
+	from = open(argv[1], O_RDONLY);
+	r = read(from, buffer, 1024);
+	to = open(argv[2], O_CREAT | O_WRONLY | O_TRUNC, 0664);
 
-    printf("Entry point address: %#lx\n", (unsigned long)elf_header.e_entry);
+	do {
+		if (from == -1 || r == -1)
+		{
+			dprintf(STDERR_FILENO,
+				"Error: Can't read from file %s\n", argv[1]);
+			free(buffer);
+			exit(98);
+		}
 
-    close(fd);
-    return 0;
+		w = write(to, buffer, r);
+		if (to == -1 || w == -1)
+		{
+			dprintf(STDERR_FILENO,
+				"Error: Can't write to %s\n", argv[2]);
+			free(buffer);
+			exit(99);
+		}
+
+		r = read(from, buffer, 1024);
+		to = open(argv[2], O_WRONLY | O_APPEND);
+
+	} while (r > 0);
+
+	free(buffer);
+	close_file(from);
+	close_file(to);
+
+	return (0);
 }
 
