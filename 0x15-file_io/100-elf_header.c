@@ -217,7 +217,7 @@ void print_type(unsigned int e_type, unsigned char *e_ident)
  * @e_entry: This is the address of the ELF's entry point.
  * @e_ident: This is a pointer to an array including the ELF class.
  */
-void print_entry(unsigned long int e_entry, unsigned char *e_ident)
+void entry_point(unsigned long int e_entry, unsigned char *e_ident)
 {
 	printf("  Entry point address:               ");
 
